@@ -17,6 +17,7 @@ CONF_TOP_P = "top_p"
 CONF_BASE_URL = "base_url"
 CONF_RECOMMENDED = "recommended"
 CONF_STREAMING = "streaming"
+CONF_EXTRA_KWARGS = "extra_kwargs"
 
 RECOMMENDED_CHAT_MODEL = "gpt-3.5-turbo"
 RECOMMENDED_CHAT_MODELS = [
