@@ -430,15 +430,25 @@ async def test_streaming_response(
 
 
 @pytest.mark.parametrize(
-    ("config_entry_options"),
-    [{CONF_EXTRA_KWARGS: '{"frequency_penalty": 0.5, "seed": 42}'}],
+    ("config_entry_options", "expected_extra_body"),
+    [
+        (
+            {CONF_EXTRA_KWARGS: '{"frequency_penalty": 0.5, "seed": 42}'},
+            {"frequency_penalty": 0.5, "seed": 42},
+        ),
+        (
+            {CONF_EXTRA_KWARGS: '{"chat_template_kwargs": {"enable_thinking": false}}'},
+            {"chat_template_kwargs": {"enable_thinking": False}},
+        ),
+    ],
 )
 async def test_extra_kwargs_passed_to_model(
     hass: HomeAssistant,
     mock_chat_log: MockChatLog,
     mock_config_entry: MockConfigEntry,
+    expected_extra_body: dict,
 ) -> None:
-    """Test that configured extra kwargs are forwarded to the completions request."""
+    """Test that configured extra kwargs are forwarded via extra_body."""
 
     with patch(
         "openai.resources.chat.completions.AsyncCompletions.create",
@@ -476,8 +486,7 @@ async def test_extra_kwargs_passed_to_model(
 
     assert result.response.response_type == intent.IntentResponseType.ACTION_DONE
     call_kwargs = mock_create.mock_calls[0][2]
-    assert call_kwargs["frequency_penalty"] == 0.5
-    assert call_kwargs["seed"] == 42
+    assert call_kwargs["extra_body"] == expected_extra_body
 
 
 @pytest.mark.parametrize(
@@ -527,7 +536,7 @@ async def test_invalid_extra_kwargs_ignored(
 
     assert result.response.response_type == intent.IntentResponseType.ACTION_DONE
     call_kwargs = mock_create.mock_calls[0][2]
-    assert "not valid json" not in call_kwargs.values()
+    assert "extra_body" not in call_kwargs
 
 
 @pytest.mark.parametrize(

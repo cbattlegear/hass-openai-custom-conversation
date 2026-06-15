@@ -375,8 +375,13 @@ class CustomOpenAIBaseLLMEntity(Entity):
             "user": chat_log.conversation_id,
             "stream": options.get(CONF_STREAMING),
         }
-        # User provided kwargs override the defaults above and can add new ones.
-        create_kwargs.update(_parse_extra_kwargs(options.get(CONF_EXTRA_KWARGS)))
+        # User provided kwargs are sent via `extra_body` so they are merged
+        # directly into the request body. This avoids the SDK rejecting
+        # provider-specific parameters that are not part of its method
+        # signature (e.g. `chat_template_kwargs`) and lets them override the
+        # standard parameters above.
+        if extra_kwargs := _parse_extra_kwargs(options.get(CONF_EXTRA_KWARGS)):
+            create_kwargs["extra_body"] = extra_kwargs
 
         for _iteration in range(MAX_TOOL_ITERATIONS):
             try:
