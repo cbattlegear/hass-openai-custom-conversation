@@ -55,7 +55,7 @@
             "max_tokens": "Select the maximum number of tokens to return.",
             "temperature": "Select the temperature for response variability.",
             "top_p": "Select the top P value for response diversity.",
-            "extra_kwargs": "Optional JSON object of additional keyword arguments to send with each model request, such as frequency_penalty, presence_penalty, or seed. These override the settings above.",
+            "extra_kwargs": "Optional JSON object of additional fields to include in the request body, such as frequency_penalty, presence_penalty, seed, or provider-specific options like chat_template_kwargs. These override the settings above.",
             "llm_hass_api": "Select the level of control over Home Assistant.",
             "recommended": "Select whether to use recommended model settings."
           }
