@@ -17,7 +17,10 @@ from openai.types.chat.chat_completion_message_tool_call import (
 from openai.types.completion_usage import CompletionUsage
 
 from homeassistant.const import CONF_LLM_HASS_API
-from custom_components.vicuna_conversation.const import CONF_STREAMING
+from custom_components.vicuna_conversation.const import (
+    CONF_EXTRA_KWARGS,
+    CONF_STREAMING,
+)
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import intent
 from homeassistant.components import conversation
@@ -424,6 +427,107 @@ async def test_streaming_response(
     assert content[0].content == "hello"
     assert content[1].role == "assistant"
     assert content[1].content == "Hello world"
+
+
+@pytest.mark.parametrize(
+    ("config_entry_options"),
+    [{CONF_EXTRA_KWARGS: '{"frequency_penalty": 0.5, "seed": 42}'}],
+)
+async def test_extra_kwargs_passed_to_model(
+    hass: HomeAssistant,
+    mock_chat_log: MockChatLog,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test that configured extra kwargs are forwarded to the completions request."""
+
+    with patch(
+        "openai.resources.chat.completions.AsyncCompletions.create",
+        new_callable=AsyncMock,
+        return_value=ChatCompletion(
+            id="chatcmpl-1234567890ABCDEFGHIJKLMNOPQRS",
+            choices=[
+                Choice(
+                    finish_reason="stop",
+                    index=0,
+                    message=ChatCompletionMessage(
+                        content="Hello, how can I help you?",
+                        role="assistant",
+                        function_call=None,
+                        tool_calls=None,
+                    ),
+                )
+            ],
+            created=1700000000,
+            model="gpt-3.5-turbo-0613",
+            object="chat.completion",
+            system_fingerprint=None,
+            usage=CompletionUsage(
+                completion_tokens=9, prompt_tokens=8, total_tokens=17
+            ),
+        ),
+    ) as mock_create:
+        result = await conversation.async_converse(
+            hass,
+            "hello",
+            mock_chat_log.conversation_id,
+            Context(),
+            agent_id="conversation.custom_openai_conversation",
+        )
+
+    assert result.response.response_type == intent.IntentResponseType.ACTION_DONE
+    call_kwargs = mock_create.mock_calls[0][2]
+    assert call_kwargs["frequency_penalty"] == 0.5
+    assert call_kwargs["seed"] == 42
+
+
+@pytest.mark.parametrize(
+    ("config_entry_options"),
+    [{CONF_EXTRA_KWARGS: "not valid json"}],
+)
+async def test_invalid_extra_kwargs_ignored(
+    hass: HomeAssistant,
+    mock_chat_log: MockChatLog,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test that invalid extra kwargs are ignored instead of breaking the call."""
+
+    with patch(
+        "openai.resources.chat.completions.AsyncCompletions.create",
+        new_callable=AsyncMock,
+        return_value=ChatCompletion(
+            id="chatcmpl-1234567890ABCDEFGHIJKLMNOPQRS",
+            choices=[
+                Choice(
+                    finish_reason="stop",
+                    index=0,
+                    message=ChatCompletionMessage(
+                        content="Hello, how can I help you?",
+                        role="assistant",
+                        function_call=None,
+                        tool_calls=None,
+                    ),
+                )
+            ],
+            created=1700000000,
+            model="gpt-3.5-turbo-0613",
+            object="chat.completion",
+            system_fingerprint=None,
+            usage=CompletionUsage(
+                completion_tokens=9, prompt_tokens=8, total_tokens=17
+            ),
+        ),
+    ) as mock_create:
+        result = await conversation.async_converse(
+            hass,
+            "hello",
+            mock_chat_log.conversation_id,
+            Context(),
+            agent_id="conversation.custom_openai_conversation",
+        )
+
+    assert result.response.response_type == intent.IntentResponseType.ACTION_DONE
+    call_kwargs = mock_create.mock_calls[0][2]
+    assert "not valid json" not in call_kwargs.values()
 
 
 @pytest.mark.parametrize(

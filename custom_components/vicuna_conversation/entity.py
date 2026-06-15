@@ -39,6 +39,7 @@ from homeassistant.helpers.entity import Entity
 
 from .const import (
     CONF_CHAT_MODEL,
+    CONF_EXTRA_KWARGS,
     CONF_MAX_TOKENS,
     CONF_TEMPERATURE,
     CONF_TOP_P,
@@ -129,6 +130,27 @@ def _decode_tool_arguments(arguments: str) -> Any:
         return json.loads(arguments)
     except json.JSONDecodeError as err:
         raise HomeAssistantError(f"Unexpected tool argument response: {err}") from err
+
+
+def _parse_extra_kwargs(value: Any) -> dict[str, Any]:
+    """Parse user provided extra kwargs for the completions request.
+
+    The value is expected to be a JSON object (or already a mapping). Invalid
+    values are ignored so a bad configuration never breaks a conversation.
+    """
+    if not value:
+        return {}
+    if isinstance(value, dict):
+        return value
+    try:
+        parsed = json.loads(value)
+    except (json.JSONDecodeError, TypeError) as err:
+        LOGGER.warning("Ignoring invalid extra kwargs %r: %s", value, err)
+        return {}
+    if not isinstance(parsed, dict):
+        LOGGER.warning("Ignoring extra kwargs that is not a JSON object: %r", value)
+        return {}
+    return parsed
 
 
 async def _transform_response(
@@ -342,19 +364,23 @@ class CustomOpenAIBaseLLMEntity(Entity):
 
         client = self.entry.runtime_data
 
+        create_kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "tools": tools or NOT_GIVEN,
+            "response_format": response_format,
+            "max_tokens": options.get(CONF_MAX_TOKENS, RECOMMENDED_MAX_TOKENS),
+            "top_p": options.get(CONF_TOP_P, RECOMMENDED_TOP_P),
+            "temperature": options.get(CONF_TEMPERATURE, RECOMMENDED_TEMPERATURE),
+            "user": chat_log.conversation_id,
+            "stream": options.get(CONF_STREAMING),
+        }
+        # User provided kwargs override the defaults above and can add new ones.
+        create_kwargs.update(_parse_extra_kwargs(options.get(CONF_EXTRA_KWARGS)))
+
         for _iteration in range(MAX_TOOL_ITERATIONS):
             try:
-                result = await client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    tools=tools or NOT_GIVEN,
-                    response_format=response_format,
-                    max_tokens=options.get(CONF_MAX_TOKENS, RECOMMENDED_MAX_TOKENS),
-                    top_p=options.get(CONF_TOP_P, RECOMMENDED_TOP_P),
-                    temperature=options.get(CONF_TEMPERATURE, RECOMMENDED_TEMPERATURE),
-                    user=chat_log.conversation_id,
-                    stream=options.get(CONF_STREAMING),
-                )
+                result = await client.chat.completions.create(**create_kwargs)
             except openai.OpenAIError as err:
                 LOGGER.error("Error talking to API: %s", err)
                 raise HomeAssistantError("Error talking to API") from err

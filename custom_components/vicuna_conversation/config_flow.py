@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, cast
 
@@ -22,6 +23,9 @@ from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
     TemplateSelector,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
     SelectSelectorMode,
     SelectSelector,
     SelectSelectorConfig,
@@ -33,6 +37,7 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     CONF_CHAT_MODEL,
+    CONF_EXTRA_KWARGS,
     CONF_MAX_TOKENS,
     CONF_PROMPT,
     CONF_RECOMMENDED,
@@ -94,6 +99,17 @@ def _recommended_model(models: list[str] | None) -> str:
         if model in models:
             return model
     return models[0]
+
+
+def _is_invalid_extra_kwargs(value: str | None) -> bool:
+    """Return True when the value is not a valid JSON object."""
+    if not value:
+        return False
+    try:
+        parsed = json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return True
+    return not isinstance(parsed, dict)
 
 
 class OpenAIConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -276,38 +292,44 @@ class ConversationSubentryFlowHandler(ConfigSubentryFlow):
             return self.async_abort(reason="entry_not_loaded")
 
         options = self.options
+        errors: dict[str, str] = {}
 
         if user_input is not None:
-            model = user_input[CONF_CHAT_MODEL]
-            stream_support = await async_validate_completions(
-                self._openai_client,
-                model=model,
-                stream=True,
-            )
-            user_input[CONF_STREAMING] = stream_support
-            if user_input[CONF_RECOMMENDED] == self.last_rendered_recommended:
-                if self._is_new:
-                    return self.async_create_entry(
-                        title=user_input.pop(CONF_NAME),
+            if _is_invalid_extra_kwargs(user_input.get(CONF_EXTRA_KWARGS)):
+                errors[CONF_EXTRA_KWARGS] = "invalid_extra_kwargs"
+                # Preserve what the user typed so they can fix it.
+                options = {**options, **user_input}
+            else:
+                model = user_input[CONF_CHAT_MODEL]
+                stream_support = await async_validate_completions(
+                    self._openai_client,
+                    model=model,
+                    stream=True,
+                )
+                user_input[CONF_STREAMING] = stream_support
+                if user_input[CONF_RECOMMENDED] == self.last_rendered_recommended:
+                    if self._is_new:
+                        return self.async_create_entry(
+                            title=user_input.pop(CONF_NAME),
+                            data=user_input,
+                        )
+
+                    return self.async_update_and_abort(
+                        self._get_entry(),
+                        self._get_reconfigure_subentry(),
                         data=user_input,
                     )
 
-                return self.async_update_and_abort(
-                    self._get_entry(),
-                    self._get_reconfigure_subentry(),
-                    data=user_input,
-                )
+                # Re-render the options again, now with the recommended options shown/hidden
+                self.last_rendered_recommended = user_input[CONF_RECOMMENDED]
 
-            # Re-render the options again, now with the recommended options shown/hidden
-            self.last_rendered_recommended = user_input[CONF_RECOMMENDED]
-
-            options = {
-                CONF_RECOMMENDED: user_input[CONF_RECOMMENDED],
-                CONF_PROMPT: user_input[CONF_PROMPT],
-                CONF_CHAT_MODEL: user_input[CONF_CHAT_MODEL],
-            }
-            if self._subentry_type == "conversation":
-                options[CONF_LLM_HASS_API] = user_input.get(CONF_LLM_HASS_API, [])
+                options = {
+                    CONF_RECOMMENDED: user_input[CONF_RECOMMENDED],
+                    CONF_PROMPT: user_input[CONF_PROMPT],
+                    CONF_CHAT_MODEL: user_input[CONF_CHAT_MODEL],
+                }
+                if self._subentry_type == "conversation":
+                    options[CONF_LLM_HASS_API] = user_input.get(CONF_LLM_HASS_API, [])
 
         models = await self._get_models()
         schema = openai_config_option_schema(
@@ -318,6 +340,7 @@ class ConversationSubentryFlowHandler(ConfigSubentryFlow):
             data_schema=self.add_suggested_values_to_schema(
                 vol.Schema(schema), options
             ),
+            errors=errors,
         )
 
 
@@ -420,6 +443,12 @@ def openai_config_option_schema(
                 description={"suggested_value": options.get(CONF_TEMPERATURE)},
                 default=RECOMMENDED_TEMPERATURE,
             ): NumberSelector(NumberSelectorConfig(min=0, max=2, step=0.05)),
+            vol.Optional(
+                CONF_EXTRA_KWARGS,
+                description={"suggested_value": options.get(CONF_EXTRA_KWARGS)},
+            ): TextSelector(
+                TextSelectorConfig(multiline=True, type=TextSelectorType.TEXT)
+            ),
         }
     )
     return schema

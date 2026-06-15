@@ -57,6 +57,7 @@ This integration requires an external server, such as any of these:
 - Press **Configure** to edit the integration options
 - Uncheck **Recommended model settings** and press **Submit**
 - Set the **Model name** to the name of the model you would like to use with the server. For example `meta-llama/llama-3.3-8b-instruct:free` if using OpenRouter.
+- Optionally set **Extra model arguments (JSON)** to pass additional keyword arguments to the model's chat completions request, for example `{"frequency_penalty": 0.5, "seed": 42}`. These override the other settings (such as temperature) and are useful for provider-specific parameters.
 
 You should then configure a [Voice Assistant](https://www.home-assistant.io/voice_control/voice_remote_local_assistant/). Select the new `Conversation Agent` you just created and expose
 entities. You should do this even if skipping the part of adding voice components

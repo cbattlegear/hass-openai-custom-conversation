@@ -45,6 +45,7 @@
             "max_tokens": "Maximum tokens to return in response",
             "temperature": "Temperature",
             "top_p": "Top P",
+            "extra_kwargs": "Extra model arguments (JSON)",
             "llm_hass_api": "Control Home Assistant",
             "recommended": "Recommended model settings"
           },
@@ -54,10 +55,14 @@
             "max_tokens": "Select the maximum number of tokens to return.",
             "temperature": "Select the temperature for response variability.",
             "top_p": "Select the top P value for response diversity.",
+            "extra_kwargs": "Optional JSON object of additional keyword arguments sent to the model's chat completions request (e.g. {\"frequency_penalty\": 0.5, \"seed\": 42}). These override the values above.",
             "llm_hass_api": "Select the level of control over Home Assistant.",
             "recommended": "Select whether to use recommended model settings."
           }
         }
+      },
+      "error": {
+        "invalid_extra_kwargs": "Extra model arguments must be a valid JSON object."
       },
       "abort": {
         "entry_not_loaded": "Cannot add things while the configuration is disabled.",
